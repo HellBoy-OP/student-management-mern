@@ -14,13 +14,15 @@ import {
   FieldLabel
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { api } from "@/utils/api"
+import { api, getApiErrorMessage } from "@/utils/api"
+import { isAuthenticated, setAuthSession } from "@/utils/auth"
 import { cn } from "@/utils/cn"
 import { decryptStudentPayload, encryptRequestPayload } from "@/utils/crypto"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { EyeClosedIcon, EyeIcon, Loader2Icon, LogInIcon } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Controller, useForm } from "react-hook-form"
+import { useLocation, useNavigate } from "react-router"
 import { toast } from "sonner"
 import { z } from "zod"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "./ui/input-group"
@@ -32,6 +34,7 @@ const formSchema = z.object({
 
 type LoginFormValues = z.infer<typeof formSchema>
 type EncryptedStudentResponse = {
+  _id?: string;
   fullName?: string;
   email?: string;
   phoneNumber?: string;
@@ -47,6 +50,9 @@ export function LoginForm({
 }: React.ComponentProps<"div">) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = location.state?.from?.pathname ?? "/";
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(formSchema),
@@ -55,6 +61,12 @@ export function LoginForm({
       password: "",
     }
   });
+
+  useEffect(() => {
+    if (isAuthenticated()) {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [navigate, redirectTo]);
 
   const onSubmit = async (data: LoginFormValues) => {
     setLoading(true);
@@ -65,12 +77,21 @@ export function LoginForm({
       });
 
       if (resp.ok) {
-        const { fullName } = await decryptStudentPayload(await resp.json<EncryptedStudentResponse>());
+        const student = await decryptStudentPayload(await resp.json<EncryptedStudentResponse>());
+        const { _id, fullName, email } = student;
+
+        setAuthSession({
+          studentId: _id,
+          fullName,
+          email,
+        });
+
         toast.success(`Welcome back, ${fullName ?? "Student"}!`);
         form.reset();
+        navigate(redirectTo, { replace: true });
       }
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : "Unexpected error";
+      const errMsg = await getApiErrorMessage(error);
       toast.error(errMsg);
     }
 

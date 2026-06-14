@@ -14,7 +14,7 @@ import {
   FieldLabel
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { api } from "@/utils/api"
+import { api, getApiErrorMessage } from "@/utils/api"
 import { cn } from "@/utils/cn"
 import { decryptStudentPayload, encryptRequestPayload } from "@/utils/crypto"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -167,7 +167,7 @@ export function StudentForm({
         }
       }
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : "Unexpected error";
+      const errMsg = await getApiErrorMessage(error);
       toast.error(errMsg);
     }
 

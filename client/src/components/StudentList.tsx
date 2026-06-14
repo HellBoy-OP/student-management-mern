@@ -7,7 +7,8 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import { api } from "@/utils/api";
+import { api, getApiErrorMessage } from "@/utils/api";
+import { getAuthSession } from "@/utils/auth";
 import { decryptStudentPayload } from "@/utils/crypto";
 import { formatDate } from "@/utils/format";
 import {
@@ -42,7 +43,8 @@ type Student = {
 
 export const StudentList = () => {
   const [students, setStudents] = useState<Student[]>([]);
-  const [editingStudent, setEditingStudent] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const authSession = getAuthSession();
 
   const handleDelete = async (id: string) => {
     try {
@@ -52,7 +54,7 @@ export const StudentList = () => {
         setStudents((prev) => prev.filter((s) => s._id !== id));
       };
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : "Unexpected error";
+      const errMsg = await getApiErrorMessage(error);
       toast.error(errMsg);
     }
   }
@@ -104,36 +106,52 @@ export const StudentList = () => {
               <TableCell>{s.address}</TableCell>
               <TableCell>{s.courseEnrolled}</TableCell>
               <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="icon-sm" variant="ghost">
-                      <EllipsisIcon />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuLabel>
-                      Quick Actions
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => setEditingStudent(true)}>
-                      <EditIcon /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => handleDelete(s._id)}
-                    >
-                      <Trash2Icon /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <UpdateDialog
-                  open={editingStudent}
-                  setOpen={setEditingStudent}
-                  initialValues={s} />
+                {authSession?.studentId === s._id && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon-sm" variant="ghost">
+                        <EllipsisIcon />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuLabel>
+                        Quick Actions
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => setEditingStudent(s)}>
+                        <EditIcon /> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => handleDelete(s._id)}
+                      >
+                        <Trash2Icon /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+      <UpdateDialog
+        open={Boolean(editingStudent)}
+        setOpen={(open) => {
+          if (!open) {
+            setEditingStudent(null);
+          }
+        }}
+        initialValues={editingStudent ?? undefined}
+        onSuccess={(updatedStudent) => {
+          if (!updatedStudent) {
+            return;
+          }
+
+          setStudents((prev) => prev.map((student) => (
+            student._id === updatedStudent._id ? updatedStudent : student
+          )));
+        }}
+      />
     </div>
   )
 }
